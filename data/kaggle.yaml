@@ -11,7 +11,7 @@
 
 train: /home/s175668/wizjakomputerowa/WizjaKomputerowa/Dataset/Kaggle/images/train  # train images (relative to 'path') 128 images
 val: /home/s175668/wizjakomputerowa/WizjaKomputerowa/Dataset/Kaggle/images/val # val images (relative to 'path') 128 images
-test:  # test images (optional)
+test:  /home/s175668/wizjakomputerowa/WizjaKomputerowa/Dataset/Kaggle/images/test # test images (optional)
 
 # Classes
 names:
