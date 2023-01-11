@@ -1,11 +1,8 @@
-from models.common import DetectMultiBackend
-
 import torch
-from models.common import DetectMultiBackend
 from pathlib import Path
 import numpy as np
 import cv2
-from PIL import Image
+import pytesseract
 
 
 def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
@@ -41,38 +38,64 @@ def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleF
     return im, ratio, (dw, dh)
 
 
-weights_path = Path('/home/s175668/wizjakomputerowa/WizjaKomputerowa/runs/train/yolo_car_plates_test_set/weights/best.pt')
+weights_path = Path('./runs/train/yolo_car_plates_test_set/weights/best.pt')
 
-  # YOLOv5 root directory
-data = '/home/s175668/wizjakomputerowa/WizjaKomputerowa/data/kaggle.yaml'
+# YOLOv5 root directory
+data = './data/kaggle.yaml'
 
 dnn=False
 half=False
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-model = torch.hub.load('ultralytics/yolov5', 'custom', '/home/s175668/wizjakomputerowa/WizjaKomputerowa/runs/train/yolo_car_plates_test_set/weights/best.pt')
-# model = DetectMultiBackend(weights_path, device=device, dnn=dnn, data=data, fp16=half)
-# stride, names, pt = model.stride, model.names, model.pt
+model = torch.hub.load('ultralytics/yolov5', 'custom', './runs/train/yolo_car_plates_test_set/weights/best.pt')
 
 # dataloader.py
-img = cv2.imread('/home/s175668/wizjakomputerowa/WizjaKomputerowa/Dataset/Kaggle/images/test/Cars19.jpg')
-im = Image.open('/home/s175668/wizjakomputerowa/WizjaKomputerowa/Dataset/Kaggle/images/test/Cars19.jpg')
-# im = letterbox(img, 640, stride=stride, auto=pt)[0]  # padded resize
-# im = im.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
-# im = np.ascontiguousarray(im)
+img_path = './Dataset/Kaggle/images/test/Cars27.jpg'
+
+img = cv2.imread(img_path)
 results = model(img)
 
-# detect.py
-# im = torch.from_numpy(im).to(model.device)
-# im = im.float()
-# im /= 255
-# if len(im.shape) == 3:
-#     im = torch.unsqueeze(im, 0)
-# im = im.float()
+boxes = results.pandas().xyxy[0].sort_values('xmin')
+# print(boxes)
 
-# output = model(im)
-im1 = im.crop((147.17978, 194.22554, 222.13144, 231.72839))
-im = im.convert('RGB')
-im.save("tablica.jpg")
-print(results.xyxy[0])
-print("model załadowany")
+confidence = 0
+for i in range(len(boxes)):
+    #bierzemy tylko tablicę z największą pewnością 
+    if boxes['confidence'][i] > confidence:
+        confidence = boxes['confidence'][i]
+        y_min = int(boxes['ymin'][i])
+        x_min = int(boxes['xmin'][i])
+
+        y_max = int(boxes['ymax'][i])
+        x_max = int(boxes['xmax'][i])
+
+        
+color = (0, 0, 255)
+thickness = 2
+
+cv2.rectangle(img, (x_min, y_min), (x_max, y_max), color, thickness)
+
+cv2.imshow('image', img)
+cv2.waitKey()
+
+#wycinanie tylko tablicy
+croped_plate = img[y_min:y_max, x_min:x_max]
+
+#przeskalowanie
+scale_percent = 300 # percent of original size
+width = int(croped_plate.shape[1] * scale_percent / 100)
+height = int(croped_plate.shape[0] * scale_percent / 100)
+dim = (width, height)
+
+# croped_plate = cv2.resize(croped_plate, dim, interpolation = cv2.INTER_AREA)
+cv2.imshow('croped', croped_plate)
+cv2.waitKey()
+
+# to trzeba sobie pobrać
+# https://github.com/UB-Mannheim/tesseract/wiki
+#tu trzeba zmienić na swoje
+# pytesseract.pytesseract.tesseract_cmd = 'C:/Program Files/Tesseract-OCR/tesseract.exe'
+# pytesseract.pytesseract.tesseract_cmd  = "C:/Program Files/Tesseract-OCR/tesseract.exe"
+
+plate = pytesseract.image_to_string(croped_plate)
+print(f"Teks na tablicy: {plate}")
