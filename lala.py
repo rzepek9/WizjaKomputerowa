@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 import cv2
 import pytesseract
+from PIL import Image
 
 
 def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
@@ -91,11 +92,16 @@ dim = (width, height)
 cv2.imshow('croped', croped_plate)
 cv2.waitKey()
 
+filename = 'croped_plate.png'
+cv2.imwrite(filename, croped_plate)
+
 # to trzeba sobie pobrać
 # https://github.com/UB-Mannheim/tesseract/wiki
 #tu trzeba zmienić na swoje
-# pytesseract.pytesseract.tesseract_cmd = 'C:/Program Files/Tesseract-OCR/tesseract.exe'
-# pytesseract.pytesseract.tesseract_cmd  = "C:/Program Files/Tesseract-OCR/tesseract.exe"
+# pytesseract.tesseract_cmd = 'C:/Program Files/Tesseract-OCR/tesseract.exe'
+pytesseract.pytesseract.tesseract_cmd = 'C:/Program Files/Tesseract-OCR/tesseract.exe'
 
-plate = pytesseract.image_to_string(croped_plate)
+img_to_process = Image.open(filename)
+plate = pytesseract.image_to_string(img_to_process)
 print(f"Teks na tablicy: {plate}")
+
