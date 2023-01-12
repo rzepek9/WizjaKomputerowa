@@ -3,11 +3,13 @@ from pathlib import Path
 import numpy as np
 import cv2
 from PIL import Image
-from pytesseract import pytesseract
+# from pytesseract import pytesseract
 import os
 from matplotlib import pyplot as plt
 import pandas as pd
 import datetime
+import pytesseract
+import shutil
 
 def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
     # Resize and pad image while meeting stride-multiple constraints
@@ -54,6 +56,13 @@ model = torch.hub.load('ultralytics/yolov5', 'custom', './runs/train/yolo_car_pl
 
 df = pd.DataFrame(columns= ['id', 'date', 'path', 'car_photo_path', 'plate_img_path', 'licence_plate_number', 'anonymous_plate', 'anonymous_number'])
 
+output_path = os.path.join('.', 'results')
+try:
+    shutil.rmtree(output_path)
+    print(f"Directory {output_path} has been deleted")
+except:
+    print(f"Directory {output_path} dose not exist")
+
 output_path_photos = os.path.join('.', 'results', 'cars')
 try:
     os.makedirs(output_path_photos, exist_ok = True)
@@ -67,6 +76,27 @@ try:
     print(f"Directory {output_path_plates} created successfully")
 except OSError as error:
     print(f"Directory {output_path_plates} can not be created")
+
+output_path_plates_text = os.path.join('.', 'results', 'plates_text')
+try:
+    os.makedirs(output_path_plates_text, exist_ok = True)
+    print(f"Directory {output_path_plates_text} created successfully")
+except OSError as error:
+    print(f"Directory {output_path_plates_text} can not be created")
+
+output_path_plates_anon = os.path.join('.', 'results', 'plates_anon')
+try:
+    os.makedirs(output_path_plates_anon, exist_ok = True)
+    print(f"Directory {output_path_plates_anon} created successfully")
+except OSError as error:
+    print(f"Directory {output_path_plates_anon} can not be created")
+
+output_path_plates_text_anon = os.path.join('.', 'results', 'plates_text_anon')
+try:
+    os.makedirs(output_path_plates_text_anon, exist_ok = True)
+    print(f"Directory {output_path_plates_text_anon} created successfully")
+except OSError as error:
+    print(f"Directory {output_path_plates_text_anon} can not be created")
 
 dataset_path = os.path.join('.', 'Dataset', 'Kaggle', 'images', 'test')
 
@@ -110,6 +140,23 @@ for file in os.listdir(dataset_path):
         plate_img_path = os.path.join(output_path_plates,  (str(id) + '_plate_photo_' + file))
         cv2.imwrite(plate_img_path, croped_plate_resized)
 
+        plate_to_recognize = croped_plate_resized.copy()
+        cv2norm_img = np.zeros((plate_to_recognize.shape[0], plate_to_recognize.shape[1]))
+        plate_to_recognize = cv2.normalize(plate_to_recognize, plate_to_recognize, 0, 255, cv2.NORM_MINMAX)
+        plate_to_recognize = cv2.threshold(plate_to_recognize, 100, 255, cv2.THRESH_BINARY)[1]
+        plate_to_recognize = cv2.GaussianBlur(plate_to_recognize, (1, 1), 0)
+        #TODO dodać config jakie znaki można rozpoznawać
+        plate_text = pytesseract.image_to_string(plate_to_recognize)
+        
+        temp_file = file.replace('.jpg', '.txt')
+        plate_text_path = os.path.join(output_path_plates_text,  (str(id) + '_plate_text_' + temp_file))
+        #TODO oczyścić z białych znaków 
+        with open(plate_text_path, 'w') as f:
+            f.write(f"recognizet plate text: {plate_text}")
+
+        #TODO anon plates and save it into plates_text_anon
+        # output_path_plates_text_anon
+
         img_gray_lp = cv2.cvtColor(croped_plate_resized, cv2.COLOR_BGR2GRAY)                        #to gray scale
         _, img_binary_lp = cv2.threshold(img_gray_lp, 200, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)  #convert to binary image
         img_binary_lp = cv2.erode(img_binary_lp, (3,3))
@@ -120,14 +167,15 @@ for file in os.listdir(dataset_path):
 
         LP_WIDTH = img_binary_lp.shape[0]
         LP_HEIGHT = img_binary_lp.shape[1]
-        # Estimations of character contours sizes of cropped license plates
+ 
+        # estymacja wielkości konturu liter 
         lower_width = LP_WIDTH/6
         upper_width = LP_WIDTH/2
         lower_height = LP_HEIGHT/10
         upper_height = 2*LP_HEIGHT/3
 
         temp_img = img_binary_lp.copy()
-        ii = img_binary_lp.copy()
+        blured_plate = img_binary_lp.copy()
 
         cntrs, _ = cv2.findContours(temp_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         cntrs = sorted(cntrs, key=cv2.contourArea, reverse=True)[:15]
@@ -147,11 +195,11 @@ for file in os.listdir(dataset_path):
                 char = temp_img[intY:intY+intHeight, intX:intX+intWidth]
                 char = cv2.resize(char, (20, 40))
 
-                cv2.rectangle(ii, (intX,intY), (intWidth+intX, intY+intHeight), (50,21,200), 2)
+                cv2.rectangle(blured_plate, (intX,intY), (intWidth+intX, intY+intHeight), (50,21,200), 2)
 
                 # ukrywanie co drugiego boxa
-                # if i % 2 == 0:
-                #     cv2.rectangle(ii, (intX,intY), (intWidth+intX, intY+intHeight), (50,21,200), -1)
+                if i > 4:
+                    cv2.rectangle(blured_plate, (intX,intY), (intWidth+intX, intY+intHeight), (50,21,200), -1)
                 
                 char = cv2.subtract(255, char)
                 char_copy = np.zeros((44,24))
@@ -160,11 +208,14 @@ for file in os.listdir(dataset_path):
                 char_copy[:, 0:2] = 0
                 char_copy[42:44, :] = 0
                 char_copy[:, 22:24] = 0
-
+                
+                #TODO dodać połączenie między daną literą a lokalizacją na tablicy  
                 img_res.append(char_copy) # List that stores the character's binary image (unsorted)
 
-        cv2.imshow('Predicted segments', ii)
-        cv2.waitKey()
+        blured_plate
+
+        blured_plate_path = os.path.join(output_path_plates_anon,  (str(id) + '_blured_plate_' + file))
+        cv2.imwrite(blured_plate_path, blured_plate)
 
         indices = sorted(range(len(x_cntr_list)), key=lambda k: x_cntr_list[k])
         img_res_copy = []
@@ -176,7 +227,7 @@ for file in os.listdir(dataset_path):
         ct = datetime.datetime.now()
         #zapisanie danych do bazy danych
         # (columns= ['id', 'date', 'path', 'car_photo_path', 'plate_img_path', 'licence_plate_number', 'anonymous_plate', 'anonymous_number'])
-        # parking_database_row = [id, ct, img_path, car_image_path, plate_img_path, ]
+        # parking_database_row = [id, ct, img_path, car_image_path, plate_img_path, plate_text_path, blured_plate_path, ]
         id += 1 
 
 
