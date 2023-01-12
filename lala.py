@@ -11,48 +11,18 @@ import datetime
 import pytesseract
 import shutil
 
-def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
-    # Resize and pad image while meeting stride-multiple constraints
-    shape = im.shape[:2]  # current shape [height, width]
-    if isinstance(new_shape, int):
-        new_shape = (new_shape, new_shape)
+def create_output_folder(path):
+    try:
+        os.makedirs(path, exist_ok = True)
+        print(f"Directory {path} created successfully")
+    except OSError as error:
+        print(error)
+        print(f"Directory {path} can not be created")
 
-    # Scale ratio (new / old)
-    r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
-    if not scaleup:  # only scale down, do not scale up (for better val mAP)
-        r = min(r, 1.0)
-
-    # Compute padding
-    ratio = r, r  # width, height ratios
-    new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
-    dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]  # wh padding
-    if auto:  # minimum rectangle
-        dw, dh = np.mod(dw, stride), np.mod(dh, stride)  # wh padding
-    elif scaleFill:  # stretch
-        dw, dh = 0.0, 0.0
-        new_unpad = (new_shape[1], new_shape[0])
-        ratio = new_shape[1] / shape[1], new_shape[0] / shape[0]  # width, height ratios
-
-    dw /= 2  # divide padding into 2 sides
-    dh /= 2
-
-    if shape[::-1] != new_unpad:  # resize
-        im = cv2.resize(im, new_unpad, interpolation=cv2.INTER_LINEAR)
-    top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
-    left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
-    im = cv2.copyMakeBorder(im, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
-    return im, ratio, (dw, dh)
-
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 weights_path = Path('./runs/train/yolo_car_plates_test_set/weights/best.pt')
-
-# YOLOv5 root directory
-data = './data/kaggle.yaml'
-
-dnn=False
-half=False
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = torch.hub.load('ultralytics/yolov5', 'custom', './runs/train/yolo_car_plates_test_set/weights/best.pt')
+model = torch.hub.load('ultralytics/yolov5', 'custom', weights_path)
 
 df = pd.DataFrame(columns= ['id', 'date', 'path', 'car_photo_path', 'plate_img_path', 'licence_plate_number', 'anonymous_plate', 'anonymous_number'])
 
@@ -64,41 +34,22 @@ except:
     print(f"Directory {output_path} dose not exist")
 
 output_path_photos = os.path.join('.', 'results', 'cars')
-try:
-    os.makedirs(output_path_photos, exist_ok = True)
-    print(f"Directory {output_path_photos} created successfully")
-except OSError as error:
-    print(f"Directory {output_path_photos} can not be created")
+create_output_folder(output_path_photos)
 
 output_path_plates = os.path.join('.', 'results', 'plates')
-try:
-    os.makedirs(output_path_plates, exist_ok = True)
-    print(f"Directory {output_path_plates} created successfully")
-except OSError as error:
-    print(f"Directory {output_path_plates} can not be created")
+create_output_folder(output_path_plates)
 
 output_path_plates_text = os.path.join('.', 'results', 'plates_text')
-try:
-    os.makedirs(output_path_plates_text, exist_ok = True)
-    print(f"Directory {output_path_plates_text} created successfully")
-except OSError as error:
-    print(f"Directory {output_path_plates_text} can not be created")
+create_output_folder(output_path_plates_text)
 
 output_path_plates_anon = os.path.join('.', 'results', 'plates_anon')
-try:
-    os.makedirs(output_path_plates_anon, exist_ok = True)
-    print(f"Directory {output_path_plates_anon} created successfully")
-except OSError as error:
-    print(f"Directory {output_path_plates_anon} can not be created")
+create_output_folder(output_path_plates_anon)
 
 output_path_plates_text_anon = os.path.join('.', 'results', 'plates_text_anon')
-try:
-    os.makedirs(output_path_plates_text_anon, exist_ok = True)
-    print(f"Directory {output_path_plates_text_anon} created successfully")
-except OSError as error:
-    print(f"Directory {output_path_plates_text_anon} can not be created")
+create_output_folder(output_path_plates_text_anon)
 
 dataset_path = os.path.join('.', 'Dataset', 'Kaggle', 'images', 'test')
+# dataset_path = os.path.join('.', 'inferention_dataset')
 
 id = 0
 for file in os.listdir(dataset_path):
@@ -124,6 +75,7 @@ for file in os.listdir(dataset_path):
                 x_max = int(boxes['xmax'][i])
         
         car_img = img.copy()
+        cv2.putText(car_img, f"Conf = {round(confidence, 3)}", (x_min + 10, y_min - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
         cv2.rectangle(car_img, (x_min, y_min), (x_max, y_max), color = (0, 0, 255), thickness = 2)
         car_image_path = os.path.join(output_path_photos,  (str(id) + '_car_photo_' + file))
         cv2.imwrite(car_image_path, car_img)
@@ -150,7 +102,8 @@ for file in os.listdir(dataset_path):
         
         temp_file = file.replace('.jpg', '.txt')
         plate_text_path = os.path.join(output_path_plates_text,  (str(id) + '_plate_text_' + temp_file))
-        #TODO oczyścić z białych znaków 
+        plate_text_path = plate_text_path.replace("\n", '')
+        plate_text_path = plate_text_path.replace(" ", '')
         with open(plate_text_path, 'w') as f:
             f.write(f"recognizet plate text: {plate_text}")
 
@@ -168,7 +121,7 @@ for file in os.listdir(dataset_path):
         LP_WIDTH = img_binary_lp.shape[0]
         LP_HEIGHT = img_binary_lp.shape[1]
  
-        # estymacja wielkości konturu liter 
+        #estymacja wielkości konturu znaków 
         lower_width = LP_WIDTH/6
         upper_width = LP_WIDTH/2
         lower_height = LP_HEIGHT/10
@@ -197,7 +150,7 @@ for file in os.listdir(dataset_path):
 
                 cv2.rectangle(blured_plate, (intX,intY), (intWidth+intX, intY+intHeight), (50,21,200), 2)
 
-                # ukrywanie co drugiego boxa
+                # ukrywanie 4 znaków na tablicy 
                 if i > 4:
                     cv2.rectangle(blured_plate, (intX,intY), (intWidth+intX, intY+intHeight), (50,21,200), -1)
                 
@@ -212,36 +165,14 @@ for file in os.listdir(dataset_path):
                 #TODO dodać połączenie między daną literą a lokalizacją na tablicy  
                 img_res.append(char_copy) # List that stores the character's binary image (unsorted)
 
-        blured_plate
-
         blured_plate_path = os.path.join(output_path_plates_anon,  (str(id) + '_blured_plate_' + file))
         cv2.imwrite(blured_plate_path, blured_plate)
 
-        indices = sorted(range(len(x_cntr_list)), key=lambda k: x_cntr_list[k])
-        img_res_copy = []
-        for idx in indices:
-            img_res_copy.append(img_res[idx])# stores character images according to their index
-        img_res = np.array(img_res_copy)
-
         #zczytanie akturalnej daty
         ct = datetime.datetime.now()
+
         #zapisanie danych do bazy danych
         # (columns= ['id', 'date', 'path', 'car_photo_path', 'plate_img_path', 'licence_plate_number', 'anonymous_plate', 'anonymous_number'])
         # parking_database_row = [id, ct, img_path, car_image_path, plate_img_path, plate_text_path, blured_plate_path, ]
         id += 1 
-
-
-
-
-
-
-
-
-
-# cv2.imshow('croped', img_binary_lp)
-# cv2.waitKey()
-# cv2.imwrite('contour.jpg',img_binary_lp)
-
-
-
 
