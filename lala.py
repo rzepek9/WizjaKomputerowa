@@ -48,8 +48,8 @@ create_output_folder(output_path_plates_anon)
 output_path_plates_text_anon = os.path.join('.', 'results', 'plates_text_anon')
 create_output_folder(output_path_plates_text_anon)
 
-dataset_path = os.path.join('.', 'Dataset', 'Kaggle', 'images', 'test')
-# dataset_path = os.path.join('.', 'inferention_dataset')
+# dataset_path = os.path.join('.', 'Dataset', 'Kaggle', 'images', 'test')
+dataset_path = os.path.join('.', 'inferention_dataset')
 
 id = 0
 for file in os.listdir(dataset_path):
@@ -97,27 +97,39 @@ for file in os.listdir(dataset_path):
         plate_to_recognize = cv2.normalize(plate_to_recognize, plate_to_recognize, 0, 255, cv2.NORM_MINMAX)
         plate_to_recognize = cv2.threshold(plate_to_recognize, 100, 255, cv2.THRESH_BINARY)[1]
         plate_to_recognize = cv2.GaussianBlur(plate_to_recognize, (1, 1), 0)
-        #TODO dodać config jakie znaki można rozpoznawać
-        plate_text = pytesseract.image_to_string(plate_to_recognize)
+        plate_text = pytesseract.image_to_string(plate_to_recognize, config='--psm 10 --oem 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPRSTUWXYZ0123456789')
         
         temp_file = file.replace('.jpg', '.txt')
         plate_text_path = os.path.join(output_path_plates_text,  (str(id) + '_plate_text_' + temp_file))
-        plate_text_path = plate_text_path.replace("\n", '')
-        plate_text_path = plate_text_path.replace(" ", '')
+        plate_text = plate_text.replace("\n", '')
+        plate_text = plate_text.replace(" ", '')
         with open(plate_text_path, 'w') as f:
             f.write(f"recognizet plate text: {plate_text}")
 
-        #TODO anon plates and save it into plates_text_anon
-        # output_path_plates_text_anon
+
+        anon_plate_text_temp = list(plate_text)
+        try:
+            anon_plate_text_temp[0] = chr(36)
+        except:
+            pass
+        try:
+            anon_plate_text_temp[2] = chr(36)
+        except:
+            pass
+        try:
+            anon_plate_text_temp[4] = chr(36)
+        except:
+            pass
+        anon_plate_text = ''.join(anon_plate_text_temp)
+        output_path_plates_text_anon_full = os.path.join(output_path_plates_text_anon,  (str(id) + '_plate_text_' + temp_file))
+        with open(output_path_plates_text_anon_full, 'w') as f:
+            f.write(f"recognizet plate text: {anon_plate_text}")
 
         img_gray_lp = cv2.cvtColor(croped_plate_resized, cv2.COLOR_BGR2GRAY)                        #to gray scale
         _, img_binary_lp = cv2.threshold(img_gray_lp, 200, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)  #convert to binary image
         img_binary_lp = cv2.erode(img_binary_lp, (3,3))
         img_binary_lp = cv2.dilate(img_binary_lp, (3,3))
         
-        # TODO
-        #make borders white - jak starczy czasu
-
         LP_WIDTH = img_binary_lp.shape[0]
         LP_HEIGHT = img_binary_lp.shape[1]
  
@@ -131,48 +143,57 @@ for file in os.listdir(dataset_path):
         blured_plate = img_binary_lp.copy()
 
         cntrs, _ = cv2.findContours(temp_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        cntrs = sorted(cntrs, key=cv2.contourArea, reverse=True)[:15]
+        cntrs = sorted(cntrs, key=cv2.contourArea, reverse=True)
 
-        x_cntr_list = []
-        target_contours = []
-        img_res = []
+        x_list = []
+        y_list = []
+        width_list = []
+        height_list = []
 
         for i, cntr in enumerate(cntrs) :
             intX, intY, intWidth, intHeight = cv2.boundingRect(cntr)
 
-            # checking the dimensions of the contour to filter out the characters by contour's size
+            # sprawdzenie czy rozmair estymowanych prostokontów ze znakami jest logiczny
             if intWidth > lower_width and intWidth < upper_width and intHeight > lower_height and intHeight < upper_height :
-                x_cntr_list.append(intX) #stores the x coordinate of the character's contour, to used later for indexing the contours
-
-                # extracting each character using the enclosing rectangle's coordinates.
-                char = temp_img[intY:intY+intHeight, intX:intX+intWidth]
-                char = cv2.resize(char, (20, 40))
+                x_list.append(intX)
+                y_list.append(intY)
+                width_list.append(intWidth)
+                height_list.append(intHeight)
 
                 cv2.rectangle(blured_plate, (intX,intY), (intWidth+intX, intY+intHeight), (50,21,200), 2)
+        
+        x_list_sorted = sorted(x_list)
+        y_list_sorted = [x for _, x in sorted(zip(x_list, y_list), key= lambda pair: pair[0])]
+        width_list_sorted = [x for _, x in sorted(zip(x_list, width_list), key= lambda pair: pair[0])]
+        height_list_sorted = [x for _, x in sorted(zip(x_list, height_list), key= lambda pair: pair[0])]
 
-                # ukrywanie 4 znaków na tablicy 
-                if i > 4:
-                    cv2.rectangle(blured_plate, (intX,intY), (intWidth+intX, intY+intHeight), (50,21,200), -1)
-                
-                char = cv2.subtract(255, char)
-                char_copy = np.zeros((44,24))
-                char_copy[2:42, 2:22] = char
-                char_copy[0:2, :] = 0
-                char_copy[:, 0:2] = 0
-                char_copy[42:44, :] = 0
-                char_copy[:, 22:24] = 0
-                
-                #TODO dodać połączenie między daną literą a lokalizacją na tablicy  
-                img_res.append(char_copy) # List that stores the character's binary image (unsorted)
+        try:
+            intX, intY, intWidth, intHeight = x_list_sorted[0], y_list_sorted[0], width_list_sorted[0], height_list_sorted[0]
+            cv2.rectangle(blured_plate, (intX,intY), (intWidth+intX, intY+intHeight), (50,21,200), -1)
+        except:
+            pass
+        try:
+            intX, intY, intWidth, intHeight = x_list_sorted[2], y_list_sorted[2], width_list_sorted[2], height_list_sorted[2]
+            cv2.rectangle(blured_plate, (intX,intY), (intWidth+intX, intY+intHeight), (50,21,200), -1)
+        except:
+            pass
+        try:
+            intX, intY, intWidth, intHeight = x_list_sorted[4], y_list_sorted[4], width_list_sorted[4], height_list_sorted[4]
+            cv2.rectangle(blured_plate, (intX,intY), (intWidth+intX, intY+intHeight), (50,21,200), -1)
+        except:
+            pass
 
         blured_plate_path = os.path.join(output_path_plates_anon,  (str(id) + '_blured_plate_' + file))
         cv2.imwrite(blured_plate_path, blured_plate)
+
+
 
         #zczytanie akturalnej daty
         ct = datetime.datetime.now()
 
         #zapisanie danych do bazy danych
-        # (columns= ['id', 'date', 'path', 'car_photo_path', 'plate_img_path', 'licence_plate_number', 'anonymous_plate', 'anonymous_number'])
-        # parking_database_row = [id, ct, img_path, car_image_path, plate_img_path, plate_text_path, blured_plate_path, ]
+        df.loc[len(df.index)] = [id, ct, img_path, car_image_path, plate_img_path, plate_text, blured_plate_path, anon_plate_text]
         id += 1 
+
+print(df)
 
