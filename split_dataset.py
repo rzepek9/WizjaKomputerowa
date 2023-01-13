@@ -16,21 +16,21 @@ for name in png:
 x_train, x_val, y_train, y_val = [], [], [], []
 
 
-# for i,data in enumerate(file_names):
-#     # if i%4 == 0:
-#     #     x_val.append(f'{data}.png')
-#     #     y_val.append(f'{data}.txt')
-#     # else:
-#     x_train.append(f'{data}.png')
-#     y_train.append(f'{data}.txt')
-#     print(i)
+for i,data in enumerate(file_names):
+    if i%4 == 0:
+        x_val.append(f'{data}.png')
+        y_val.append(f'{data}.txt')
+    else:
+        x_train.append(f'{data}.png')
+        y_train.append(f'{data}.txt')
+    print(i)
 
 
 
-# for x, y in zip(x_val, y_val):
-#     shutil.move(img_path/x, img_path/'val'/x)
-#     shutil.move(label_path/y, label_path/'val'/y)
+for x, y in zip(x_val, y_val):
+    shutil.move(img_path/x, img_path/'val'/x)
+    shutil.move(label_path/y, label_path/'val'/y)
 
-# for x, y in zip(x_train, y_train):
-#     shutil.move(img_path/x, img_path/'train'/x)
-#     shutil.move(label_path/y, label_path/'train'/y)
+for x, y in zip(x_train, y_train):
+    shutil.move(img_path/x, img_path/'train'/x)
+    shutil.move(label_path/y, label_path/'train'/y)
