@@ -1,1 +1,1 @@
-recognizet plate text: $T
+recognizet plate text: $M$

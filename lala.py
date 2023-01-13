@@ -90,13 +90,14 @@ for file in os.listdir(dataset_path):
         dim = (width, height)
         croped_plate_resized = cv2.resize(croped_plate, dim, interpolation = cv2.INTER_AREA)
         plate_img_path = os.path.join(output_path_plates,  (str(id) + '_plate_photo_' + file))
-        cv2.imwrite(plate_img_path, croped_plate_resized)
 
+        cv2.imwrite(plate_img_path, croped_plate_resized)
         plate_to_recognize = croped_plate_resized.copy()
-        cv2norm_img = np.zeros((plate_to_recognize.shape[0], plate_to_recognize.shape[1]))
+        plate_to_recognize = cv2.cvtColor(plate_to_recognize, cv2.COLOR_BGR2GRAY) 
         plate_to_recognize = cv2.normalize(plate_to_recognize, plate_to_recognize, 0, 255, cv2.NORM_MINMAX)
         plate_to_recognize = cv2.threshold(plate_to_recognize, 100, 255, cv2.THRESH_BINARY)[1]
         plate_to_recognize = cv2.GaussianBlur(plate_to_recognize, (1, 1), 0)
+        
         plate_text = pytesseract.image_to_string(plate_to_recognize, config='--psm 10 --oem 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPRSTUWXYZ0123456789')
         
         temp_file = file.replace('.jpg', '.txt')
@@ -129,7 +130,7 @@ for file in os.listdir(dataset_path):
         _, img_binary_lp = cv2.threshold(img_gray_lp, 200, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)  #convert to binary image
         img_binary_lp = cv2.erode(img_binary_lp, (3,3))
         img_binary_lp = cv2.dilate(img_binary_lp, (3,3))
-        
+
         LP_WIDTH = img_binary_lp.shape[0]
         LP_HEIGHT = img_binary_lp.shape[1]
  
