@@ -10,6 +10,7 @@ import pandas as pd
 import datetime
 import pytesseract
 import shutil
+import time
 
 def create_output_folder(path):
     try:
@@ -51,8 +52,10 @@ create_output_folder(output_path_plates_text_anon)
 # dataset_path = os.path.join('.', 'Dataset', 'Kaggle', 'images', 'test')
 dataset_path = os.path.join('.', 'inferention_dataset')
 
+delays = []
 id = 0
 for file in os.listdir(dataset_path):
+    start = time.time()
     if file.endswith(".jpg"):
         img_path = os.path.join(dataset_path, file)
         
@@ -196,5 +199,9 @@ for file in os.listdir(dataset_path):
         df.loc[len(df.index)] = [id, ct, img_path, car_image_path, plate_img_path, plate_text, blured_plate_path, anon_plate_text]
         id += 1 
 
-print(df)
+        end = time.time()
+        delays.append(end - start)
 
+print(df)
+print('\n')
+print(f"Średni czas inferencji: {np.mean(delays)}")
